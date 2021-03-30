@@ -118,7 +118,7 @@ float4 PS(VertexOut pin) : SV_Target
 
         float3 nominator = NDF * G * F;
         //float3 nominator = NDF * F;
-        float denominator = 4 * max(dot(H, V), 0.0) * max(dot(N, L), 0.0f);
+        float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0f);
         float3 specular = nominator / max(denominator, 0.001);
 
         float3 kS = F;
