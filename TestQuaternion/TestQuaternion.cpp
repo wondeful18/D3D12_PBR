@@ -52,13 +52,14 @@ bool TexColumnsApp::Initialize()
 	// so we have to query this information.
 	mCbvSrvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-	mCamera.SetPosition(2.0f, 2.0f, -15.0f);
+	mCamera.SetPosition(6.0f, 10.0f, -60.0f);
 
 	LoadTextures();
 	BuildRootSignature();
 	BuildDescriptorHeaps();
 	BuildShadersAndInputLayout();
 	BuildShapeGeometry();
+	BuildAirPlaneGeometry();
 	BuildMaterials();
 	BuildRenderItems();
 	BuildFrameResources();
@@ -343,10 +344,18 @@ void TexColumnsApp::LoadTextures()
 		mCommandList.Get(), whiteTex->Filename.c_str(),
 		whiteTex->Resource, whiteTex->UploadHeap));
 
+	auto airPlaneTex = std::make_unique<Texture>();
+	airPlaneTex->Name = "airPlaneTex";
+	airPlaneTex->Filename = L"Models/airplane1.dds";
+	ThrowIfFailed(DirectX::CreateDDSTextureFromFile12(md3dDevice.Get(),
+		mCommandList.Get(), airPlaneTex->Filename.c_str(),
+		airPlaneTex->Resource, airPlaneTex->UploadHeap));
+
 	mTextures[bricksTex->Name] = std::move(bricksTex);
 	mTextures[stoneTex->Name] = std::move(stoneTex);
 	mTextures[tileTex->Name] = std::move(tileTex);
 	mTextures[whiteTex->Name] = std::move(whiteTex);
+	mTextures[airPlaneTex->Name] = std::move(airPlaneTex);
 }
 
 void TexColumnsApp::BuildRootSignature()
@@ -398,7 +407,7 @@ void TexColumnsApp::BuildDescriptorHeaps()
 	// Create the SRV heap.
 	//
 	D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-	srvHeapDesc.NumDescriptors = 4;
+	srvHeapDesc.NumDescriptors = 5;
 	srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(md3dDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvDescriptorHeap)));
@@ -412,6 +421,7 @@ void TexColumnsApp::BuildDescriptorHeaps()
 	auto stoneTex = mTextures["stoneTex"]->Resource;
 	auto tileTex = mTextures["tileTex"]->Resource;
 	auto whiteTex = mTextures["whiteTex"]->Resource;
+	auto airPlaneTex = mTextures["airPlaneTex"]->Resource;
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 	srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -441,6 +451,12 @@ void TexColumnsApp::BuildDescriptorHeaps()
 	srvDesc.Format = whiteTex->GetDesc().Format;
 	srvDesc.Texture2D.MipLevels = whiteTex->GetDesc().MipLevels;
 	md3dDevice->CreateShaderResourceView(whiteTex.Get(), &srvDesc, hDescriptor);
+
+	hDescriptor.Offset(1, mCbvSrvDescriptorSize);
+
+	srvDesc.Format = airPlaneTex->GetDesc().Format;
+	srvDesc.Texture2D.MipLevels = airPlaneTex->GetDesc().MipLevels;
+	md3dDevice->CreateShaderResourceView(airPlaneTex.Get(), &srvDesc, hDescriptor);
 }
 
 void TexColumnsApp::BuildShadersAndInputLayout()
@@ -467,8 +483,8 @@ void TexColumnsApp::BuildShapeGeometry()
 	GeometryGenerator geoGen;
 	GeometryGenerator::MeshData box = geoGen.CreateBox(1.0f, 1.0f, 1.0f, 3);
 	GeometryGenerator::MeshData grid = geoGen.CreateGrid(20.0f, 30.0f, 60, 40);
-	GeometryGenerator::MeshData sphere = geoGen.CreateCylinder(0.1f, 0.01f, 1.f, 20, 20);
-	GeometryGenerator::MeshData cylinder = geoGen.CreateCylinder(0.1f, 0.1f, 10.0f, 20, 20);
+	GeometryGenerator::MeshData sphere = geoGen.CreateCylinder(0.2f, 0.01f, 4.f, 20, 20);
+	GeometryGenerator::MeshData cylinder = geoGen.CreateCylinder(0.2f, 0.2f, 40.0f, 20, 20);
 
 
 	//
@@ -679,12 +695,21 @@ void TexColumnsApp::BuildMaterials()
 	z_axis->FresnelR0 = XMFLOAT3(0.02f, 0.02f, 0.02f);
 	z_axis->Roughness = 0.3f;
 
+	auto air_plane = std::make_unique<Material>();
+	air_plane->Name = "air_plane";
+	air_plane->MatCBIndex = 6;
+	air_plane->DiffuseSrvHeapIndex = 4;
+	air_plane->DiffuseAlbedo = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+	air_plane->FresnelR0 = XMFLOAT3(0.03f, 0.03f, 0.03f);
+	air_plane->Roughness = 0.2f;
+
 	mMaterials["bricks0"] = std::move(bricks0);
 	mMaterials["stone0"] = std::move(stone0);
 	mMaterials["tile0"] = std::move(tile0);
 	mMaterials["y_axis"] = std::move(y_axis);
 	mMaterials["x_axis"] = std::move(x_axis);
 	mMaterials["z_axis"] = std::move(z_axis);
+	mMaterials["air_plane"] = std::move(air_plane);
 }
 
 void TexColumnsApp::BuildRenderItems()
@@ -720,7 +745,7 @@ void TexColumnsApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(yAxisLineRitem));
 
 	auto yAxisArrowRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&yAxisArrowRitem->World, XMMatrixTranslation(0.0f, 5.5f, 0.0f));
+	XMStoreFloat4x4(&yAxisArrowRitem->World, XMMatrixTranslation(0.0f, 22.f, 0.0f));
 	yAxisArrowRitem->ObjCBIndex = 2;
 	yAxisArrowRitem->Mat = mMaterials["y_axis"].get();
 	yAxisArrowRitem->Geo = mGeometries["shapeGeo"].get();
@@ -744,7 +769,7 @@ void TexColumnsApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(xAxisLineRitem));
 
 	auto xAxisArrowRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&xAxisArrowRitem->World, XMMatrixTranslation(0.0f, 5.5f, 0.0f) * XMMatrixRotationZ(-MathHelper::Pi / 2.f));
+	XMStoreFloat4x4(&xAxisArrowRitem->World, XMMatrixTranslation(0.0f, 22.f, 0.0f) * XMMatrixRotationZ(-MathHelper::Pi / 2.f));
 	xAxisArrowRitem->ObjCBIndex = 4;
 	xAxisArrowRitem->Mat = mMaterials["x_axis"].get();
 	xAxisArrowRitem->Geo = mGeometries["shapeGeo"].get();
@@ -768,7 +793,7 @@ void TexColumnsApp::BuildRenderItems()
 	mAllRitems.push_back(std::move(zAxisLineRitem));
 
 	auto zAxisArrowRitem = std::make_unique<RenderItem>();
-	XMStoreFloat4x4(&zAxisArrowRitem->World, XMMatrixTranslation(0.0f, 5.5f, 0.0f) * XMMatrixRotationX(MathHelper::Pi / 2.f));
+	XMStoreFloat4x4(&zAxisArrowRitem->World, XMMatrixTranslation(0.0f, 22.f, 0.0f) * XMMatrixRotationX(MathHelper::Pi / 2.f));
 	zAxisArrowRitem->ObjCBIndex = 6;
 	zAxisArrowRitem->Mat = mMaterials["z_axis"].get();
 	zAxisArrowRitem->Geo = mGeometries["shapeGeo"].get();
@@ -777,6 +802,18 @@ void TexColumnsApp::BuildRenderItems()
 	zAxisArrowRitem->StartIndexLocation = zAxisArrowRitem->Geo->DrawArgs["sphere"].StartIndexLocation;
 	zAxisArrowRitem->BaseVertexLocation = zAxisArrowRitem->Geo->DrawArgs["sphere"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(zAxisArrowRitem));
+
+
+	auto zAirPlaneRitem = std::make_unique<RenderItem>();
+	zAirPlaneRitem->World = MathHelper::Identity4x4();
+	zAirPlaneRitem->ObjCBIndex = 6;
+	zAirPlaneRitem->Mat = mMaterials["air_plane"].get();
+	zAirPlaneRitem->Geo = mGeometries["skullGeo"].get();
+	zAirPlaneRitem->PrimitiveType = D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	zAirPlaneRitem->IndexCount = zAirPlaneRitem->Geo->DrawArgs["skull"].IndexCount;
+	zAirPlaneRitem->StartIndexLocation = zAirPlaneRitem->Geo->DrawArgs["skull"].StartIndexLocation;
+	zAirPlaneRitem->BaseVertexLocation = zAirPlaneRitem->Geo->DrawArgs["skull"].BaseVertexLocation;
+	mAllRitems.push_back(std::move(zAirPlaneRitem));
 	
 
 	// All the render items are opaque.
@@ -813,6 +850,126 @@ void TexColumnsApp::DrawRenderItems(ID3D12GraphicsCommandList* cmdList, const st
 
 		cmdList->DrawIndexedInstanced(ri->IndexCount, 1, ri->StartIndexLocation, ri->BaseVertexLocation, 0);
 	}
+}
+
+void TexColumnsApp::BuildAirPlaneGeometry()
+{
+	std::ifstream fin("Models/airplane1.txt");
+
+	if (!fin)
+	{
+		MessageBox(0, L"Models/airplane1.txt not found.", 0, 0);
+		return;
+	}
+
+	UINT vcount = 0;
+	UINT tcount = 0;
+	std::string ignore;
+
+	fin >> ignore >> vcount;
+	fin >> ignore >> tcount;
+	fin >> ignore >> ignore >> ignore >> ignore;
+
+	XMFLOAT3 vMinf3(+MathHelper::Infinity, +MathHelper::Infinity, +MathHelper::Infinity);
+	XMFLOAT3 vMaxf3(-MathHelper::Infinity, -MathHelper::Infinity, -MathHelper::Infinity);
+
+	XMVECTOR vMin = XMLoadFloat3(&vMinf3);
+	XMVECTOR vMax = XMLoadFloat3(&vMaxf3);
+
+	// 把原始模型缩小一些，并且向下移动一些，绕y轴反转下 z轴
+	XMMATRIX A = XMMatrixScaling(0.3f, 0.3f, 0.3f) * XMMatrixTranslation(0.0f, -1.2f, 0.0f) * XMMatrixRotationY(MathHelper::Pi);
+
+
+	std::vector<Vertex> vertices(vcount);
+	for (UINT i = 0; i < vcount; ++i)
+	{
+		fin >> vertices[i].Pos.x >> vertices[i].Pos.y >> vertices[i].Pos.z;
+		XMVECTOR Pos = XMVector3Transform(XMLoadFloat3(&vertices[i].Pos), A);
+		XMStoreFloat3(&vertices[i].Pos, Pos);
+
+		fin >> vertices[i].TexC.x >> vertices[i].TexC.y;
+		vertices[i].Normal = { 0.f, 0.f, 0.f };
+		XMVECTOR P = XMLoadFloat3(&vertices[i].Pos);
+		vMin = XMVectorMin(vMin, P);
+		vMax = XMVectorMax(vMax, P);
+	}
+
+	BoundingBox bounds;
+	XMStoreFloat3(&bounds.Center, 0.5f*(vMin + vMax));
+	XMStoreFloat3(&bounds.Extents, 0.5f*(vMax - vMin));
+
+	fin >> ignore;
+	fin >> ignore;
+	fin >> ignore;
+
+	std::vector<std::int32_t> indices(3 * tcount);
+	for (UINT i = 0; i < tcount; ++i)
+	{
+		fin >> indices[i * 3 + 0] >> indices[i * 3 + 1] >> indices[i * 3 + 2];
+	}
+
+	fin.close();
+
+	// 手动计算一下法线
+	for (UINT i = 0; i < tcount; ++i)
+	{
+		int i0 = indices[i * 3 + 0];
+		int i1 = indices[i * 3 + 1];
+		int i2 = indices[i * 3 + 2];
+
+		Vertex &v0 = vertices[i0];
+		Vertex &v1 = vertices[i1];
+		Vertex &v2 = vertices[i2];
+
+		XMVECTOR e0 = XMLoadFloat3(&v1.Pos) - XMLoadFloat3(&v0.Pos);
+		XMVECTOR e1 = XMLoadFloat3(&v2.Pos) - XMLoadFloat3(&v0.Pos);
+		XMVECTOR faceNormal = XMVector3Cross(e0, e1);
+
+		XMStoreFloat3(&v0.Normal, XMLoadFloat3(&v0.Normal) + faceNormal);
+		XMStoreFloat3(&v1.Normal, XMLoadFloat3(&v1.Normal) + faceNormal);
+		XMStoreFloat3(&v2.Normal, XMLoadFloat3(&v2.Normal) + faceNormal);
+	}
+
+	for (UINT i = 0; i < vcount; ++i)
+	{
+		XMVECTOR vetexNormal = XMLoadFloat3(&vertices[i].Normal);
+		XMStoreFloat3(&vertices[i].Normal, XMVector3Normalize(vetexNormal));
+	}
+
+	const UINT vbByteSize = (UINT)vertices.size() * sizeof(Vertex);
+
+	const UINT ibByteSize = (UINT)indices.size() * sizeof(std::int32_t);
+
+	auto geo = std::make_unique<MeshGeometry>();
+	geo->Name = "skullGeo";
+
+	ThrowIfFailed(D3DCreateBlob(vbByteSize, &geo->VertexBufferCPU));
+	CopyMemory(geo->VertexBufferCPU->GetBufferPointer(), vertices.data(), vbByteSize);
+
+	ThrowIfFailed(D3DCreateBlob(ibByteSize, &geo->IndexBufferCPU));
+	CopyMemory(geo->IndexBufferCPU->GetBufferPointer(), indices.data(), ibByteSize);
+
+	geo->VertexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), vertices.data(), vbByteSize, geo->VertexBufferUploader);
+
+	geo->IndexBufferGPU = d3dUtil::CreateDefaultBuffer(md3dDevice.Get(),
+		mCommandList.Get(), indices.data(), ibByteSize, geo->IndexBufferUploader);
+
+	geo->VertexByteStride = sizeof(Vertex);
+	geo->VertexBufferByteSize = vbByteSize;
+	geo->IndexFormat = DXGI_FORMAT_R32_UINT;
+	geo->IndexBufferByteSize = ibByteSize;
+
+	SubmeshGeometry submesh;
+	submesh.IndexCount = (UINT)indices.size();
+	submesh.StartIndexLocation = 0;
+	submesh.BaseVertexLocation = 0;
+	submesh.Bounds = bounds;
+
+	geo->DrawArgs["skull"] = submesh;
+
+	mGeometries[geo->Name] = std::move(geo);
+
 }
 
 std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> TexColumnsApp::GetStaticSamplers()
