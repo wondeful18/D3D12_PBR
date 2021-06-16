@@ -482,7 +482,7 @@ void TexColumnsApp::BuildShapeGeometry()
 {
 	GeometryGenerator geoGen;
 	GeometryGenerator::MeshData box = geoGen.CreateBox(1.0f, 1.0f, 1.0f, 3);
-	GeometryGenerator::MeshData grid = geoGen.CreateGrid(20.0f, 30.0f, 60, 40);
+	GeometryGenerator::MeshData grid = geoGen.CreateGrid(40.0f, 60.0f, 60, 40);
 	GeometryGenerator::MeshData sphere = geoGen.CreateCylinder(0.2f, 0.01f, 4.f, 20, 20);
 	GeometryGenerator::MeshData cylinder = geoGen.CreateCylinder(0.2f, 0.2f, 40.0f, 20, 20);
 
@@ -716,7 +716,7 @@ void TexColumnsApp::BuildRenderItems()
 {
 	auto gridRitem = std::make_unique<RenderItem>();
 	//gridRitem->World = MathHelper::Identity4x4();
-	XMStoreFloat4x4(&gridRitem->World, XMMatrixTranslation(0.0f, -5.0f, 0.0f));
+	XMStoreFloat4x4(&gridRitem->World, XMMatrixTranslation(0.0f, -8.f, 0.0f));
 	XMStoreFloat4x4(&gridRitem->TexTransform, XMMatrixScaling(8.0f, 8.0f, 1.0f));
 	gridRitem->ObjCBIndex = 0;
 	gridRitem->Mat = mMaterials["tile0"].get();
@@ -803,9 +803,41 @@ void TexColumnsApp::BuildRenderItems()
 	zAxisArrowRitem->BaseVertexLocation = zAxisArrowRitem->Geo->DrawArgs["sphere"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(zAxisArrowRitem));
 
+	//-----------------------------------------------------------------------
+	// 飞机
+
+	// XMVECTOR WorldQ = XMQuaternionRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), -MathHelper::Pi / 4.f);
+	// XMVECTOR WorldQ = XMQuaternionRotationAxis(XMVectorSet(0.f, 0.f, 1.f, 0.f), MathHelper::Pi / 4.f);
+	// XMVECTOR WorldQ = XMQuaternionRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), -MathHelper::Pi / 4.f);
+
+	/*XMVECTOR Q1 = XMQuaternionRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), -MathHelper::Pi / 4.f);
+	XMVECTOR Q2 = XMQuaternionRotationAxis(XMVectorSet(0.f, 1.f, 0.f, 0.f), -MathHelper::Pi / 4.f);
+	XMVECTOR Q3 = XMQuaternionRotationAxis(XMVectorSet(0.f, 0.f, 1.f, 0.f), MathHelper::Pi / 4.f);
+
+
+	XMVECTOR WorldQ = XMQuaternionMultiply(Q1, Q2);*/
+	// WorldQ = XMQuaternionMultiply(WorldQ, Q3);
+
+	XMVECTOR axis;
+	float angle;
+
+	XMVECTOR Q = XMQuaternionRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), -MathHelper::Pi / 4.f);
+	DirectX::XMFLOAT4 QFloat4;
+	// 把四元数保存到一个Float数组，以便打印值
+	XMStoreFloat4(&QFloat4, Q);
+
+	XMQuaternionToAxisAngle(&axis, &angle, Q);
+	float angleDegree = angle * 180.f / MathHelper::Pi;
+	DirectX::XMFLOAT3 axisFloat3;
+	XMStoreFloat3(&axisFloat3, axis);
+
+
+
+
 
 	auto zAirPlaneRitem = std::make_unique<RenderItem>();
-	zAirPlaneRitem->World = MathHelper::Identity4x4();
+	// zAirPlaneRitem->World = MathHelper::Identity4x4();
+	XMStoreFloat4x4(&zAirPlaneRitem->World, XMMatrixRotationQuaternion(Q));
 	zAirPlaneRitem->ObjCBIndex = 6;
 	zAirPlaneRitem->Mat = mMaterials["air_plane"].get();
 	zAirPlaneRitem->Geo = mGeometries["skullGeo"].get();
