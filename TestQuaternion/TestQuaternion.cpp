@@ -73,6 +73,14 @@ bool TexColumnsApp::Initialize()
 	// Wait until initialization is complete.
 	FlushCommandQueue();
 
+	// 关键帧1
+	mQ1 = XMQuaternionIdentity();
+	// 关键帧2
+	mQ2 = XMQuaternionRotationAxis(XMVectorSet(1.f, 0.f, 0.f, 0.f), -MathHelper::Pi / 4.f);
+
+	// 插值时间参数t
+	mT = 0.f;
+
 	return true;
 }
 
@@ -109,6 +117,20 @@ void TexColumnsApp::Update(const GameTimer& gt)
 	UpdateObjectCBs(gt);
 	UpdateMaterialCBs(gt);
 	UpdateMainPassCB(gt);
+
+	mT += gt.DeltaTime() / 2;
+
+	if (mT > 1.f)
+	{
+		mT = 0.f;
+	}
+
+	// 插值，计算当前的旋转角度四元数
+	XMVECTOR Q = XMQuaternionSlerp(mQ1, mQ2, mT);
+	// 把四元数的角度保存到飞机渲染项的世界矩阵中
+	XMStoreFloat4x4(&mAirPlaneRitem->World, XMMatrixRotationQuaternion(Q));
+	// 设置飞机渲染项弄脏了，需要更新常量缓冲
+	mAirPlaneRitem->NumFramesDirty = gNumFrameResources;
 }
 
 void TexColumnsApp::Draw(const GameTimer& gt)
@@ -846,6 +868,8 @@ void TexColumnsApp::BuildRenderItems()
 	zAirPlaneRitem->StartIndexLocation = zAirPlaneRitem->Geo->DrawArgs["skull"].StartIndexLocation;
 	zAirPlaneRitem->BaseVertexLocation = zAirPlaneRitem->Geo->DrawArgs["skull"].BaseVertexLocation;
 	mAllRitems.push_back(std::move(zAirPlaneRitem));
+
+	mAirPlaneRitem = ((*mAllRitems.rbegin()).get());
 	
 
 	// All the render items are opaque.

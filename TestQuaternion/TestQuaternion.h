@@ -121,5 +121,9 @@ private:
 	Camera mCamera;
 
 	POINT mLastMousePos;
+	XMVECTOR mQ1;
+	XMVECTOR mQ2;
+	float mT = 0.f;
+	RenderItem *mAirPlaneRitem = nullptr;
 };
 
